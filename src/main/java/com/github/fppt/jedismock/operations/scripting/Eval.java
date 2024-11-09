@@ -6,14 +6,6 @@ import com.github.fppt.jedismock.operations.RedisCommand;
 import com.github.fppt.jedismock.server.Response;
 import com.github.fppt.jedismock.storage.OperationExecutorState;
 import com.github.fppt.jedismock.storage.RedisBase;
-import org.luaj.vm2.Globals;
-import org.luaj.vm2.LuaError;
-import org.luaj.vm2.LuaString;
-import org.luaj.vm2.LuaTable;
-import org.luaj.vm2.LuaValue;
-import org.luaj.vm2.lib.jse.CoerceJavaToLua;
-import org.luaj.vm2.lib.jse.JsePlatform;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -21,6 +13,13 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.luaj.vm2.Globals;
+import org.luaj.vm2.LuaError;
+import org.luaj.vm2.LuaString;
+import org.luaj.vm2.LuaTable;
+import org.luaj.vm2.LuaValue;
+import org.luaj.vm2.lib.jse.CoerceJavaToLua;
+import org.luaj.vm2.lib.jse.JsePlatform;
 
 import static com.github.fppt.jedismock.operations.scripting.Script.getScriptSHA;
 
@@ -60,6 +59,7 @@ public class Eval extends AbstractRedisOperation {
         globals.set("KEYS", embedLuaListToValue(args.subList(0, keysNum)));
         globals.set("ARGV", embedLuaListToValue(args.subList(keysNum, args.size())));
         globals.set("_mock", CoerceJavaToLua.coerce(new LuaRedisCallback(state)));
+        globals.set("cjson", globals.load(new LuaCjsonLib()));
         int selected = state.getSelected();
         try {
             final LuaValue result = globals.load(script).call();

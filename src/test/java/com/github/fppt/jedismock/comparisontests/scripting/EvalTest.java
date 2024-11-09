@@ -1,17 +1,16 @@
 package com.github.fppt.jedismock.comparisontests.scripting;
 
 import com.github.fppt.jedismock.comparisontests.ComparisonBase;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.extension.ExtendWith;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.exceptions.JedisDataException;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -21,6 +20,20 @@ import static org.assertj.core.api.InstanceOfAssertFactories.LIST;
 
 @ExtendWith(ComparisonBase.class)
 public class EvalTest {
+    public static final String CJSON_DECODE_TEST_SCRIPT = "local function as_array(table)\n"
+            + "    local array = {}\n"
+            + "    for k, v in pairs(table) do\n"
+            + "        array[#array + 1] = k\n"
+            + "        if type(v) == \"table\" then\n"
+            + "            array[#array + 1] = as_array(v)\n"
+            + "        else\n"
+            + "            array[#array + 1] = v\n"
+            + "        end\n"
+            + "    end\n"
+            + "    return array\n"
+            + "end\n"
+            + "return as_array(cjson.decode(ARGV[1]))";
+
     @BeforeEach
     void setUp(Jedis jedis) {
         jedis.flushAll();
@@ -293,5 +306,245 @@ public class EvalTest {
         jedis.eval("redis.call(\"SADD\", \"myset\", unpack({ \"the\", \"quick\", \"brown\", \"fox\" }))");
         assertThat(jedis.smembers("myset"))
                 .containsExactly("the", "quick", "brown", "fox");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeJustBooleanTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode(true)", 0))
+                .isEqualTo(Boolean.TRUE.toString());
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeJustIntegerTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode(100)", 0))
+                .isEqualTo("100");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeJustDoubleTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode(100.00)", 0))
+                .isEqualTo("100");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeJustStringTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode('str')", 0))
+                .isEqualTo("\"str\"");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeJustArrayTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode({1, 2, 3})", 0))
+                .isEqualTo("[1,2,3]");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeManualArrayTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode({[1] = 1, [2] = 2, [3] = 3})", 0))
+                .isEqualTo("[1,2,3]");
+    }
+
+    @TestTemplate
+    @Disabled("luaj skip nil values in arrays")
+    void evalCjsonEncodeArrayWithNilTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode({1, nil, 3})", 0))
+                .isEqualTo("[1,null,3]");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeArrayWithMixedTypesTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode({1, 'str', true, {1, 2}, {['foo'] = 'bar'}})", 0))
+                .isEqualTo("[1,\"str\",true,[1,2],{\"foo\":\"bar\"}]");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeJsonBooleanTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode({['foo'] = true})", 0))
+                .isEqualTo("{\"foo\":true}");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeJsonIntegerTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode({['foo'] = 100})", 0))
+                .isEqualTo("{\"foo\":100}");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeJsonDoubleTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode({['foo'] = 100.00})", 0))
+                .isEqualTo("{\"foo\":100}");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeJsonStringTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode({['foo'] = 'str'})", 0))
+                .isEqualTo("{\"foo\":\"str\"}");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeJsonArrayTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode({['foo'] = {1, 2, 3}})", 0))
+                .isEqualTo("{\"foo\":[1,2,3]}");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeJsonManualArrayTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode({['foo'] = {[1] = 1, [2] = 2, [3] = 3}})", 0))
+                .isEqualTo("{\"foo\":[1,2,3]}");
+    }
+
+    @TestTemplate
+    @Disabled("luaj skip nil values in arrays")
+    void evalCjsonEncodeJsonArrayWithNilTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode({['foo'] = {1, nil, 3}})", 0))
+                .isEqualTo("{\"foo\":[1,null,3]}");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeNestedJsonTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode({['foo'] = {['bar'] = 1}})", 0))
+                .isEqualTo("{\"foo\":{\"bar\":1}}");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeJsonArray(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode({{['foo'] = 'bar'}})", 0))
+                .isEqualTo("[{\"foo\":\"bar\"}]");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeNilTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode(nil)", 0))
+                .isEqualTo("null");
+    }
+
+    @TestTemplate
+    void evalCjsonEncodeEmptyTableTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.encode({})", 0))
+                .isEqualTo("{}");
+    }
+
+    @TestTemplate
+    void evalCjsonDecodeBooleanTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.decode('true')", 0))
+                .isEqualTo(1L);
+    }
+
+    @TestTemplate
+    void evalCjsonDecodeIntegerTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.decode('100')", 0))
+                .isEqualTo(100L);
+    }
+
+    @TestTemplate
+    void evalCjsonDecodeDoubleTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.decode('100.00')", 0))
+                .isEqualTo(100L);
+    }
+
+    @TestTemplate
+    void evalCjsonDecodeStringTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.decode('\"str\"')", 0))
+                .isEqualTo("str");
+    }
+
+    @TestTemplate
+    @Disabled("not supported at the moment")
+    void evalCjsonDecodeArrayTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.decode('[1, 2, 3]')", 0))
+                .isEqualTo(asList(1L, 2L, 3L));
+    }
+
+    @TestTemplate
+    void evalCjsonDecodeJsonBooleanTest(Jedis jedis) {
+        Assertions.assertThat(
+                jedis.eval(
+                        CJSON_DECODE_TEST_SCRIPT,
+                        0,
+                        "{\"foo\":true}"
+                )
+        ).isEqualTo(asList("foo", 1L));
+    }
+
+    @TestTemplate
+    void evalCjsonDecodeJsonIntegerTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval(
+                CJSON_DECODE_TEST_SCRIPT,
+                0,
+                "{\"foo\":100}"
+        )).isEqualTo(asList("foo", 100L));
+    }
+
+    @TestTemplate
+    void evalCjsonDecodeJsonDoubleTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval(
+                CJSON_DECODE_TEST_SCRIPT,
+                0,
+                "{\"foo\":100.00}"
+        )).isEqualTo(asList("foo", 100L));
+    }
+
+    @TestTemplate
+    void evalCjsonDecodeJsonStringTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval(
+                CJSON_DECODE_TEST_SCRIPT,
+                0,
+                "{\"foo\":\"str\"}"
+        )).isEqualTo(asList("foo", "str"));
+    }
+
+    @TestTemplate
+    void evalCjsonDecodeJsonArrayTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval(
+                CJSON_DECODE_TEST_SCRIPT,
+                0,
+                "{\"foo\":[{\"bar\": \"baz\"}]}"
+        )).isEqualTo(asList("foo", asList(1L, asList("bar", "baz"))));
+    }
+
+    @TestTemplate
+    @Disabled("luaj skip nil values in arrays")
+    void evalCjsonDecodeJsonArrayWithNilTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval(
+                CJSON_DECODE_TEST_SCRIPT,
+                0,
+                "{\"foo\":[1, null, 3]}"
+        )).isEqualTo(asList("foo", asList(1L, 1L, 2L, null, 3L, 3L)));
+    }
+
+    @TestTemplate
+    void evalCjsonDecodeNestedJsonTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval(
+                CJSON_DECODE_TEST_SCRIPT,
+                0,
+                "{\"foo\":{\"bar\":1}}"
+        )).isEqualTo(asList("foo", asList("bar", 1L)));
+    }
+
+    @TestTemplate
+    void evalCjsonDecodeJsonArray(Jedis jedis) {
+        Assertions.assertThat(jedis.eval(
+                CJSON_DECODE_TEST_SCRIPT,
+                0,
+                "[{\"foo\":\"bar\"}]"
+        )).isEqualTo(asList(1L, asList("foo", "bar")));
+    }
+
+    @TestTemplate
+    void evalCjsonDecodeNilTest(Jedis jedis) {
+        Assertions.assertThatThrownBy(() -> jedis.eval("return cjson.decode(nil)"))
+                .isInstanceOf(JedisDataException.class);
+    }
+
+    @TestTemplate
+    void evalCjsonDecodeEmptyTableTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.decode('{}')"))
+                .isEqualTo(Collections.emptyList());
+    }
+
+    @TestTemplate
+    void evalCjsonDecodeEmptyArrayTest(Jedis jedis) {
+        Assertions.assertThat(jedis.eval("return cjson.decode('[]')"))
+                .isEqualTo(Collections.emptyList());
     }
 }
